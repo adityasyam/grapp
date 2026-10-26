@@ -214,6 +214,24 @@ implementation follows the same Algorithm 1 as
 `pylops.utils.estimators.trace_hutchpp`, and is cross-checked against it in
 the test suite (pylops is not a dependency; the check skips if it is absent).
 
+### Why pylops is not a dependency
+
+`pylops.FunctionOperator` would shorten the operator definitions in
+`operators.py`, but it defines only `_matvec`, so the inherited `matmat`
+loops over columns one at a time. This package applies operators to blocks of
+30-100 columns in trace estimation and in the Nystrom sketch, and measured at
+`N = 4000` on a 50-column block that loop costs 8.70 ms against 2.00 ms for an
+explicit block `matmat` -- a 4.4x penalty on its hottest operation, and worse
+for an ARG or GRG operator where one block product amortizes a graph traversal
+across all columns. pylops' operator algebra (`a * Op1 + b * Op2`) degrades
+identically. A `pylops.LinearOperator` subclass with an explicit `_matmat`
+does preserve blocks, but that is the same custom class this package already
+has, so pylops would add no code reduction.
+
+Importing pylops also costs 76 MB of resident memory (42.6 -> 118.5 MB) and
+821 ms of startup (350 -> 1171 ms) on top of numpy and scipy, for a package
+whose point is to stay light enough to vendor into something else.
+
 ## Cost
 
 Per AI-REML iteration, with `m` genetic components and `t` trace vectors:

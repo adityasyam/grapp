@@ -38,8 +38,17 @@ def _from_matmat(
     block-product function, so this collapses the five-way
     ``matvec``/``matmat``/``rmatvec``/``rmatmat``/``dtype`` boilerplate that
     :class:`LinearOperator` otherwise needs at each construction site.
-    (``pylops.FunctionOperator`` does the same thing; this keeps the package
-    to numpy and scipy.)
+
+    ``pylops.FunctionOperator`` looks like a drop-in replacement but is not:
+    it supplies only ``_matvec``, so the inherited ``matmat`` falls back to
+    looping over columns one at a time.  Measured at ``N = 4000`` on a
+    50-column block, that is 8.70 ms against 2.00 ms here -- a 4.4x penalty
+    on exactly the operation this package leans on, since trace estimation
+    and the Nystrom sketch apply operators to 30-100 columns at once.  The
+    cost is worse for a real ARG or GRG operator, where one block product
+    amortizes a graph traversal across every column.  pylops' operator
+    algebra (``a * Op1 + b * Op2``) degrades the same way.  Keeping the
+    explicit block ``matmat`` here is deliberate.
     """
 
     def _as_vector(vector: numpy.typing.NDArray) -> numpy.typing.NDArray:
