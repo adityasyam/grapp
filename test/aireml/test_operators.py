@@ -67,9 +67,21 @@ class TestOperators(unittest.TestCase):
         numpy.testing.assert_allclose(
             materialize(combination), 2.0 * first + 3.0 * second, atol=TOLERANCE
         )
-        combination.set_coefficients([0.0, 1.5])
+        # Construction is free, so new coefficients mean a new instance.
+        rebuilt = LinearCombinationOperator([first, second], [0.0, 1.5])
         numpy.testing.assert_allclose(
-            materialize(combination), 1.5 * second, atol=TOLERANCE
+            materialize(rebuilt), 1.5 * second, atol=TOLERANCE
+        )
+
+    def test_linear_combination_handles_zero_coefficients(self):
+        # A zero coefficient is just a zero weight -- no special-casing.
+        first = self.rng.standard_normal((5, 5))
+        first = first @ first.T
+        second = numpy.eye(5)
+        numpy.testing.assert_allclose(
+            materialize(LinearCombinationOperator([first, second], [0.0, 0.0])),
+            numpy.zeros((5, 5)),
+            atol=TOLERANCE,
         )
 
     def test_linear_combination_validates(self):

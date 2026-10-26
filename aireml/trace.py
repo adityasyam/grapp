@@ -31,27 +31,33 @@ product here is a conjugate-gradient solve, so compare estimators at equal
 from typing import NamedTuple, Optional
 
 import numpy
+import numpy.typing
 from scipy.linalg import solve_triangular
 from scipy.sparse.linalg import LinearOperator, aslinearoperator
 
-__all__ = ["TraceEstimate", "estimate_trace", "rademacher"]
+from .operators import operator_size
 
 
 class TraceEstimate(NamedTuple):
-    """Result of a stochastic trace estimate."""
+    """
+    Result of a stochastic trace estimate.
+
+    :param value: The estimated trace.
+    :param stderr: Heuristic standard error.  For XTrace the per-vector
+        estimates are correlated, so this understates the true error somewhat;
+        Epperly et al. (2024) use the same heuristic.
+    :param num_matvecs: Number of matrix-vector products actually consumed,
+        which differs between estimators for the same ``num_vectors``.
+    """
 
     value: float
-    #: Heuristic standard error.  For XTrace the per-vector estimates are
-    #: correlated, so this understates the true error somewhat; Epperly et al.
-    #: (2024) use the same heuristic.
     stderr: float
-    #: Number of matrix-vector products consumed.
     num_matvecs: int
 
 
 def rademacher(
     num_rows: int, num_cols: int, rng: numpy.random.Generator
-) -> numpy.ndarray:
+) -> numpy.typing.NDArray:
     """``num_rows x num_cols`` matrix of independent +/-1 entries."""
     return (
         rng.integers(0, 2, size=(num_rows, num_cols)).astype(numpy.float64) * 2.0 - 1.0
@@ -61,6 +67,9 @@ def rademacher(
 def _hutchinson(
     operator: LinearOperator, num_vectors: int, rng: numpy.random.Generator
 ) -> TraceEstimate:
+    """Hutchinson's estimator (Hutchinson 1990).  Needs at least one probe."""
+    if num_vectors < 1:
+        raise ValueError("hutchinson needs num_vectors >= 1")
     size = operator.shape[0]
     test = rademacher(size, num_vectors, rng)
     products = numpy.asarray(operator.matmat(test))
@@ -93,7 +102,12 @@ def _xtrace(
     single QR: if ``Y = A Omega = Q R`` then the unit vector in ``range(Y)``
     orthogonal to ``range(Y_{-i})`` is ``Q s_i / ||s_i||`` with ``s_i`` the
     i-th column of ``R^{-T}``, so ``Q_{-i} Q_{-i}^T = Q Q^T - u_i u_i^T``.
+
+    Needs at least two test vectors: leaving one out of a single-vector
+    sketch leaves nothing to build ``Q_{-i}`` from.
     """
+    if num_vectors < 2:
+        raise ValueError("xtrace needs num_vectors >= 2")
     size = operator.shape[0]
     test = rademacher(size, num_vectors, rng)
     sketch = numpy.asarray(operator.matmat(test))  # Y = A @ Omega
@@ -157,7 +171,12 @@ def _hutchpp(
     remaining variance comes from the complement, where the spectrum has
     already been deflated.  Unbiased because ``G`` is independent of ``S`` and
     hence of ``Q``.
+
+    Needs a budget of at least three: the split spends one product on each of
+    the sketch, the subspace trace, and the correction.
     """
+    if num_vectors < 3:
+        raise ValueError("hutchpp needs num_vectors >= 3")
     size = operator.shape[0]
     count = num_vectors // 3
     sketch_vectors = rademacher(size, count, rng)
@@ -209,24 +228,16 @@ def estimate_trace(
     :param rng: Random generator; a fresh default one is used if omitted.
     """
     operator = aslinearoperator(operator)
-    rows, cols = operator.shape
-    if rows != cols:
-        raise ValueError(f"Expected a square operator, got shape {operator.shape}")
+    size = operator_size(operator)
     if method == "exact":
         return _exact(operator)
     if rng is None:
         rng = numpy.random.default_rng()
-    if num_vectors < 1:
-        raise ValueError("num_vectors must be positive")
-    num_vectors = min(num_vectors, rows)
+    num_vectors = min(num_vectors, size)
     if method == "hutchinson":
         return _hutchinson(operator, num_vectors, rng)
     if method == "hutchpp":
-        if num_vectors < 3:
-            raise ValueError("hutchpp needs num_vectors >= 3")
         return _hutchpp(operator, num_vectors, rng)
     if method == "xtrace":
-        if num_vectors < 2:
-            return _hutchinson(operator, num_vectors, rng)
         return _xtrace(operator, num_vectors, rng)
     raise ValueError(f"Unknown trace estimator: {method!r}")

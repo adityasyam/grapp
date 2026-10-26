@@ -94,9 +94,14 @@ class TestTraceEstimators(unittest.TestCase):
             self.assertEqual(estimate.num_matvecs, 3 * (budget // 3))
             self.assertLessEqual(estimate.num_matvecs, budget)
 
-    def test_hutchpp_requires_a_minimum_budget(self):
-        with self.assertRaises(ValueError):
-            estimate_trace(aslinearoperator(self.matrix), 2, "hutchpp", self.rng)
+    def test_estimators_enforce_their_own_minimum_budget(self):
+        # Each estimator owns the requirement its own algorithm implies:
+        # Hutchinson needs one probe, XTrace needs two (leave-one-out), and
+        # Hutch++ needs three (its budget splits three ways).
+        operator = aslinearoperator(self.matrix)
+        for method, too_few in (("hutchinson", 0), ("xtrace", 1), ("hutchpp", 2)):
+            with self.assertRaises(ValueError, msg=f"{method} accepted {too_few}"):
+                estimate_trace(operator, too_few, method, self.rng)
 
     def test_hutchpp_matches_an_independent_implementation(self):
         """

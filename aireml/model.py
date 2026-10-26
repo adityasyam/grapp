@@ -13,13 +13,12 @@ plus dense work that is linear in ``N`` (because ``X`` is ``N x C`` with
 from typing import List, Optional
 
 import numpy
+import numpy.typing
 from scipy.linalg import cho_factor, cho_solve
 from scipy.sparse.linalg import LinearOperator
 
 from .operators import Coefficients
 from .solvers import CovarianceSolver, DenseSolver
-
-__all__ = ["RemlState"]
 
 
 class RemlState:
@@ -33,8 +32,8 @@ class RemlState:
 
     def __init__(
         self,
-        y: numpy.ndarray,
-        covariates: numpy.ndarray,
+        y: numpy.typing.NDArray,
+        covariates: numpy.typing.NDArray,
         solver: CovarianceSolver,
     ):
         self.y = numpy.asarray(y, dtype=numpy.float64).ravel()
@@ -54,10 +53,10 @@ class RemlState:
             )
         self.num_components = solver.num_components
 
-        self.coefficients: Optional[numpy.ndarray] = None
-        self.projected_y: Optional[numpy.ndarray] = None
-        self.fixed_effects: Optional[numpy.ndarray] = None
-        self._solved_covariates: Optional[numpy.ndarray] = None
+        self.coefficients: Optional[numpy.typing.NDArray] = None
+        self.projected_y: Optional[numpy.typing.NDArray] = None
+        self.fixed_effects: Optional[numpy.typing.NDArray] = None
+        self._solved_covariates: Optional[numpy.typing.NDArray] = None
         self._information_factor: Optional[tuple] = None
 
     # ------------------------------------------------------------------
@@ -84,7 +83,7 @@ class RemlState:
     # ------------------------------------------------------------------
     # products with P
     # ------------------------------------------------------------------
-    def apply_projection(self, block: numpy.ndarray) -> numpy.ndarray:
+    def apply_projection(self, block: numpy.typing.NDArray) -> numpy.typing.NDArray:
         """``P @ block`` for a vector or a block of vectors."""
         self._require_update()
         array = numpy.asarray(block, dtype=numpy.float64)
@@ -102,7 +101,7 @@ class RemlState:
         """``P V_index`` as a (non-symmetric) :class:`LinearOperator`."""
         self._require_update()
 
-        def _matmat(other: numpy.ndarray) -> numpy.ndarray:
+        def _matmat(other: numpy.typing.NDArray) -> numpy.typing.NDArray:
             return self.apply_projection(self.solver.component_matmat(index, other))
 
         return LinearOperator(
@@ -115,7 +114,7 @@ class RemlState:
     # ------------------------------------------------------------------
     # gradient and average information
     # ------------------------------------------------------------------
-    def quadratic_terms(self) -> numpy.ndarray:
+    def quadratic_terms(self) -> numpy.typing.NDArray:
         """``y^T P V_i P y`` for each component ``i``."""
         self._require_update()
         assert self.projected_y is not None
@@ -129,7 +128,7 @@ class RemlState:
             ]
         )
 
-    def average_information(self) -> numpy.ndarray:
+    def average_information(self) -> numpy.typing.NDArray:
         """
         The average information matrix ``AI_ij = y^T P V_i P V_j P y``.
 
@@ -140,7 +139,7 @@ class RemlState:
         """
         self._require_update()
         assert self.projected_y is not None
-        weighted: List[numpy.ndarray] = [
+        weighted: List[numpy.typing.NDArray] = [
             self.solver.component_matmat(index, self.projected_y)
             for index in range(self.num_components)
         ]

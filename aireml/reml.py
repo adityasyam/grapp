@@ -24,6 +24,7 @@ import time
 from typing import Callable, List, Optional, Sequence, Union
 
 import numpy
+import numpy.typing
 from scipy.sparse.linalg import LinearOperator, aslinearoperator
 
 from .operators import (
@@ -36,10 +37,7 @@ from .model import RemlState
 from .solvers import ConjugateGradientSolver, CovarianceSolver, DenseSolver
 from .trace import estimate_trace, rademacher
 
-__all__ = ["REMLResult", "fit_reml", "haseman_elston"]
-
-
-OperatorLike = Union[numpy.ndarray, LinearOperator]
+OperatorLike = Union[numpy.typing.NDArray, LinearOperator]
 
 
 def _as_operator_list(relatedness) -> List[LinearOperator]:
@@ -49,25 +47,25 @@ def _as_operator_list(relatedness) -> List[LinearOperator]:
 
 
 def _residual_maker(
-    covariates: numpy.ndarray,
-) -> Callable[[numpy.ndarray], numpy.ndarray]:
+    covariates: numpy.typing.NDArray,
+) -> Callable[[numpy.typing.NDArray], numpy.typing.NDArray]:
     """Return ``block -> (I - X (X^T X)^-1 X^T) block``."""
     basis, _ = numpy.linalg.qr(covariates)
 
-    def _apply(block: numpy.ndarray) -> numpy.ndarray:
+    def _apply(block: numpy.typing.NDArray) -> numpy.typing.NDArray:
         return block - basis @ (basis.T @ block)
 
     return _apply
 
 
 def haseman_elston(
-    y: numpy.ndarray,
+    y: numpy.typing.NDArray,
     operators: Sequence[LinearOperator],
-    covariates: numpy.ndarray,
+    covariates: numpy.typing.NDArray,
     num_vectors: int = 50,
     rng: Optional[numpy.random.Generator] = None,
     exact: bool = False,
-) -> numpy.ndarray:
+) -> numpy.typing.NDArray:
     """
     Randomized Haseman-Elston moment estimates of the variance components.
 
@@ -146,15 +144,15 @@ class REMLResult:
 
     def __init__(
         self,
-        variance_components: numpy.ndarray,
+        variance_components: numpy.typing.NDArray,
         state: RemlState,
         genetic_operators: Sequence[LinearOperator],
-        gradient: numpy.ndarray,
-        average_information: numpy.ndarray,
-        history: List[numpy.ndarray],
+        gradient: numpy.typing.NDArray,
+        average_information: numpy.typing.NDArray,
+        history: List[numpy.typing.NDArray],
         converged: bool,
         num_iterations: int,
-        initial_values: numpy.ndarray,
+        initial_values: numpy.typing.NDArray,
         elapsed: float,
     ):
         self.variance_components = numpy.asarray(variance_components)
@@ -208,7 +206,7 @@ class REMLResult:
         return float(numpy.sqrt(variance)) if variance > 0 else float("nan")
 
     # ------------------------------------------------------------------
-    def blup(self) -> numpy.ndarray:
+    def blup(self) -> numpy.typing.NDArray:
         """
         Best linear unbiased predictions of the genetic values of the
         individuals that were fitted: ``g_hat = sum_i theta_i V_i P y``.
@@ -279,9 +277,9 @@ class REMLResult:
 
 
 def fit_reml(
-    y: numpy.ndarray,
+    y: numpy.typing.NDArray,
     relatedness: Union[OperatorLike, Sequence[OperatorLike]],
-    covariates: Optional[numpy.ndarray] = None,
+    covariates: Optional[numpy.typing.NDArray] = None,
     add_intercept: bool = True,
     initial_values: Optional[Coefficients] = None,
     max_iterations: int = 100,
@@ -295,7 +293,9 @@ def fit_reml(
     preconditioner_rank: int = 100,
     min_variance: Optional[float] = None,
     seed: Optional[int] = None,
-    callback: Optional[Callable[[int, numpy.ndarray, numpy.ndarray], None]] = None,
+    callback: Optional[
+        Callable[[int, numpy.typing.NDArray, numpy.typing.NDArray], None]
+    ] = None,
     verbose: bool = False,
 ) -> REMLResult:
     """
@@ -359,7 +359,7 @@ def fit_reml(
     operators = genetic + [identity_operator(size)]
     num_components = len(operators)
 
-    design: numpy.ndarray
+    design: numpy.typing.NDArray
     if covariates is None:
         design = numpy.ones((size, 1)) if add_intercept else numpy.empty((size, 0))
     else:
@@ -411,7 +411,7 @@ def fit_reml(
         min_variance = 1e-6 * max(float(numpy.var(y)), float(numpy.finfo(float).tiny))
     theta = numpy.maximum(theta, min_variance)
 
-    history: List[numpy.ndarray] = []
+    history: List[numpy.typing.NDArray] = []
     gradient = numpy.zeros(num_components)
     information = numpy.eye(num_components)
     converged = False
